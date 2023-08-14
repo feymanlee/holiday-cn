@@ -67,9 +67,16 @@ func IsRestDay(t time.Time) bool {
 
 func loadConfig(t time.Time) (*config, error) {
 	dayKey := t.Format("01-02")
-	if c, ok := configs[t.Year()]; ok {
+
+	// 首先尝试使用读锁来读取配置
+	rwm.RLock()
+	c, ok := configs[t.Year()]
+	rwm.RUnlock()
+	if ok {
 		return c[dayKey], nil
 	}
+
+	// 如果配置不存在，则加载配置并使用写锁来写入
 	bytes, err := asset.Asset(fmt.Sprintf("data/%d.json", t.Year()))
 	if err != nil {
 		return nil, err
@@ -79,6 +86,11 @@ func loadConfig(t time.Time) (*config, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// 使用写锁来更新共享配置
+	rwm.Lock()
 	configs[t.Year()] = yearConfig
+	rwm.Unlock()
+
 	return configs[t.Year()][dayKey], err
 }
